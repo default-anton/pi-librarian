@@ -1,0 +1,38 @@
+{
+  "name": "pi-librarian",
+  "version": "1.0.0",
+  "description": "GitHub research subagent package for pi coding agent",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "github",
+    "research",
+    "subagent"
+  ],
+  "license": "Apache-2.0",
+  "author": "Anton Kuzmenko",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/default-anton/pi-librarian.git"
+  },
+  "bugs": {
+    "url": "https://github.com/default-anton/pi-librarian/issues"
+  },
+  "homepage": "https://github.com/default-anton/pi-librarian#readme",
+  "pi": {
+    "extensions": [
+      "./extensions/index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-tui": "*",
+    "@sinclair/typebox": "*"
+  },
+  "files": [
+    "extensions/",
+    "README.md",
+    "LICENSE"
+  ]
+}
