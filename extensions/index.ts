@@ -167,9 +167,9 @@ export default function librarianExtension(pi: ExtensionAPI) {
         ];
 
         const modelRegistry = ctx.modelRegistry;
-        const subModel = getSmallModelFromProvider(modelRegistry);
+        const subModelSelection = getSmallModelFromProvider(modelRegistry);
 
-        if (!subModel) {
+        if (!subModelSelection) {
           const error = "No models available. Configure credentials (e.g. /login or auth.json) and try again.";
           runs[0].status = "error";
           runs[0].error = error;
@@ -185,6 +185,9 @@ export default function librarianExtension(pi: ExtensionAPI) {
             isError: true,
           };
         }
+
+        const subModel = subModelSelection.model;
+        const subagentThinkingLevel = subModelSelection.thinkingLevel;
 
         let lastUpdate = 0;
         const emitAll = (force = false) => {
@@ -299,7 +302,7 @@ export default function librarianExtension(pi: ExtensionAPI) {
             resourceLoader,
             sessionManager: SessionManager.inMemory(workspace),
             model: subModel,
-            thinkingLevel: "off",
+            thinkingLevel: subagentThinkingLevel,
             tools: [createReadTool(workspace), createBashTool(workspace)],
             customTools: [githubCodeSearchTool, githubFetchFileTool],
           });
