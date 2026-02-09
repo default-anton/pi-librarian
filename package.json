@@ -25,6 +25,9 @@
       "./extensions/index.ts"
     ]
   },
+  "scripts": {
+    "test:model-selection": "node --test extensions/model-selection.test.ts"
+  },
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*",
     "@mariozechner/pi-tui": "*",

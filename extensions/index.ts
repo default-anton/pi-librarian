@@ -167,7 +167,7 @@ export default function librarianExtension(pi: ExtensionAPI) {
         ];
 
         const modelRegistry = ctx.modelRegistry;
-        const subModelSelection = getSmallModelFromProvider(modelRegistry);
+        const subModelSelection = getSmallModelFromProvider(modelRegistry, ctx.model);
 
         if (!subModelSelection) {
           const error = "No models available. Configure credentials (e.g. /login or auth.json) and try again.";
@@ -188,6 +188,11 @@ export default function librarianExtension(pi: ExtensionAPI) {
 
         const subModel = subModelSelection.model;
         const subagentThinkingLevel = subModelSelection.thinkingLevel;
+        const subagentSelection = {
+          authMode: subModelSelection.authMode,
+          authSource: subModelSelection.authSource,
+          reason: subModelSelection.reason,
+        } as const;
 
         let lastUpdate = 0;
         const emitAll = (force = false) => {
@@ -205,6 +210,7 @@ export default function librarianExtension(pi: ExtensionAPI) {
               workspace,
               subagentProvider: subModel.provider,
               subagentModelId: subModel.id,
+              subagentSelection,
               runs,
             } satisfies LibrarianDetails,
           });
@@ -256,6 +262,7 @@ export default function librarianExtension(pi: ExtensionAPI) {
               runs,
               subagentProvider: subModel.provider,
               subagentModelId: subModel.id,
+              subagentSelection,
             } satisfies LibrarianDetails,
             isError: status === "error",
           };
@@ -378,6 +385,7 @@ export default function librarianExtension(pi: ExtensionAPI) {
             runs,
             subagentProvider: subModel.provider,
             subagentModelId: subModel.id,
+            subagentSelection,
           } satisfies LibrarianDetails,
           isError: status === "error",
         };
@@ -421,18 +429,26 @@ export default function librarianExtension(pi: ExtensionAPI) {
       const totalTurns = run?.turns ?? 0;
       const cachedCount = run?.cachedFiles.length ?? 0;
 
+      const selectionSummary = details.subagentSelection
+        ? `${details.subagentSelection.authMode}/${details.subagentSelection.authSource}`
+        : "?/?";
+
       const header =
         icon +
         " " +
         theme.fg("toolTitle", theme.bold("librarian ")) +
         theme.fg(
           "dim",
-          `${details.subagentProvider ?? "?"}/${details.subagentModelId ?? "?"} • ${totalTurns} turns • ${totalToolCalls} tool call${totalToolCalls === 1 ? "" : "s"} • ${cachedCount} cached file${cachedCount === 1 ? "" : "s"}`,
+          `${details.subagentProvider ?? "?"}/${details.subagentModelId ?? "?"} • ${selectionSummary} • ${totalTurns} turns • ${totalToolCalls} tool call${totalToolCalls === 1 ? "" : "s"} • ${cachedCount} cached file${cachedCount === 1 ? "" : "s"}`,
         );
 
       const workspaceLine = details.workspace
         ? `${theme.fg("muted", "workspace: ")}${theme.fg("toolOutput", details.workspace)}`
         : theme.fg("muted", "workspace: (none)");
+
+      const selectionReasonLine = details.subagentSelection
+        ? `${theme.fg("muted", "selection: ")}${theme.fg("toolOutput", details.subagentSelection.reason)}`
+        : undefined;
 
       let toolsText = "";
       if (run && run.toolCalls.length > 0) {
@@ -448,6 +464,7 @@ export default function librarianExtension(pi: ExtensionAPI) {
 
       if (status === "running") {
         let text = `${header}\n${workspaceLine}`;
+        if (expanded && selectionReasonLine) text += `\n${selectionReasonLine}`;
         if (toolsText) text += `\n\n${toolsText}`;
         text += `\n\n${theme.fg("muted", "Searching GitHub…")}`;
         return new Text(text, 0, 0);
@@ -469,6 +486,7 @@ export default function librarianExtension(pi: ExtensionAPI) {
       const container = new Container();
       container.addChild(new Text(header, 0, 0));
       container.addChild(new Text(workspaceLine, 0, 0));
+      if (selectionReasonLine) container.addChild(new Text(selectionReasonLine, 0, 0));
       if (toolsText) {
         container.addChild(new Spacer(1));
         container.addChild(new Text(toolsText, 0, 0));

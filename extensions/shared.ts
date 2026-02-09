@@ -45,11 +45,18 @@ export interface LibrarianRunDetails {
   endedAt?: number;
 }
 
+export interface SubagentSelectionInfo {
+  authMode: "oauth" | "api-key";
+  authSource: "runtime" | "api_key" | "oauth" | "env" | "fallback" | "none";
+  reason: string;
+}
+
 export interface LibrarianDetails {
   status: LibrarianStatus;
   workspace?: string;
   subagentProvider?: string;
   subagentModelId?: string;
+  subagentSelection?: SubagentSelectionInfo;
   runs: LibrarianRunDetails[];
 }
 
