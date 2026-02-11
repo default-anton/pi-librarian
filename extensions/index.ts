@@ -18,8 +18,6 @@ import {
   LibrarianParams,
   MAX_TOOL_CALLS_TO_KEEP,
   asStringArray,
-  buildLibrarianSystemPrompt,
-  buildLibrarianUserPrompt,
   bumpDefaultEventTargetMaxListeners,
   clampNumber,
   computeOverallStatus,
@@ -30,6 +28,7 @@ import {
   type LibrarianDetails,
   type LibrarianRunDetails,
 } from "./librarian-core";
+import { buildLibrarianSystemPrompt, buildLibrarianUserPrompt } from "./librarian-prompts.md.ts";
 import { getSmallModelFromProvider } from "./model-selection";
 
 function createTurnBudgetExtension(maxTurns: number): ExtensionFactory {
