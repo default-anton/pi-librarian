@@ -26,7 +26,12 @@
     ]
   },
   "scripts": {
-    "test:model-selection": "node --test extensions/model-selection.test.ts"
+    "test:model-selection": "node --test extensions/model-selection.test.ts",
+    "pack:check": "npm pack --dry-run",
+    "prepublishOnly": "npm run test:model-selection"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*",

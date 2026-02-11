@@ -4,6 +4,14 @@ GitHub-focused research subagent package for [pi](https://github.com/badlogic/pi
 
 ## Installation
 
+From npm (after publish):
+
+```bash
+pi install npm:pi-librarian
+```
+
+From git:
+
 ```bash
 pi install git:github.com/default-anton/pi-librarian
 ```
@@ -11,6 +19,8 @@ pi install git:github.com/default-anton/pi-librarian
 Or use without installing:
 
 ```bash
+pi -e npm:pi-librarian
+# or
 pi -e git:github.com/default-anton/pi-librarian
 ```
 
