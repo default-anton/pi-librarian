@@ -29,7 +29,7 @@ import {
   type LibrarianRunDetails,
 } from "./librarian-core";
 import { buildLibrarianSystemPrompt, buildLibrarianUserPrompt } from "./librarian-prompts.md.ts";
-import { getSmallModelFromProvider } from "./model-selection";
+import { getSmallModelFromProvider } from "pi-subagent-model-selection";
 
 function createTurnBudgetExtension(maxTurns: number): ExtensionFactory {
   return (pi) => {

@@ -7,7 +7,6 @@ Use this when shipping a new `pi-librarian` version.
 1. Ensure the working tree is clean (or only includes intended release changes).
 2. Confirm release version (`X.Y.Z`).
 3. Run required validation:
-   - `npm run test:model-selection`
    - `npm run pack:check`
 4. Bump package version (`package.json`).
 5. Commit and push release changes.

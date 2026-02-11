@@ -26,9 +26,8 @@
     ]
   },
   "scripts": {
-    "test:model-selection": "node --test extensions/model-selection.test.ts",
     "pack:check": "npm pack --dry-run",
-    "prepublishOnly": "npm run test:model-selection"
+    "prepublishOnly": "npm run pack:check"
   },
   "publishConfig": {
     "access": "public"
