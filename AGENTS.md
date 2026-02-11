@@ -20,3 +20,7 @@ When changing model-selection behavior:
 1. Update `extensions/model-selection.test.ts`.
 2. Update README section `Model selection policy`.
 3. Keep fallback behavior explicit and deterministic.
+
+## Release process
+
+For commit/push/tag/GitHub release/npm publish workflow, follow `docs/release-playbook.md`.
