@@ -32,7 +32,7 @@ pi -e git:github.com/default-anton/pi-librarian
 - Instructs the subagent to use `gh` directly for search/tree/fetch workflows.
 - Caches only selected files in an isolated temporary workspace under `/tmp/pi-librarian/run-*/repos/...`.
 - Returns the subagent's final Markdown answer as-is (no extension-side post-processing).
-- Selects subagent model dynamically based on current model auth mode (OAuth vs API key).
+- Selects subagent model dynamically based on current model auth mode (OAuth vs API key) via shared package `pi-subagent-model-selection`.
 - Emits compact selection diagnostics (`authMode`, `authSource`, `reason`) in tool details.
 
 ## Tool interface
