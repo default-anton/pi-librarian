@@ -1,5 +1,4 @@
 import * as fs from "node:fs/promises";
-import * as os from "node:os";
 import * as path from "node:path";
 
 import type { ExtensionAPI, ExtensionContext, ExtensionFactory } from "@mariozechner/pi-coding-agent";
@@ -13,7 +12,6 @@ import {
 } from "@mariozechner/pi-coding-agent";
 import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 
-import { createGithubCodeSearchTool, createGithubFetchFileTool, ensureGithubAuth } from "./github-tools";
 import {
   DEFAULT_MAX_SEARCH_RESULTS,
   DEFAULT_MAX_TURNS,
@@ -29,32 +27,10 @@ import {
   getLastAssistantText,
   renderCombinedMarkdown,
   shorten,
-  type CachedFile,
   type LibrarianDetails,
   type LibrarianRunDetails,
-} from "./shared";
+} from "./librarian-core";
 import { getSmallModelFromProvider } from "./model-selection";
-
-function buildVerifiedAppendix(run: LibrarianRunDetails): string {
-  const hasRead = run.toolCalls.some((call) => call.name === "read" && !call.isError);
-  const files = run.cachedFiles;
-
-  const lines: string[] = ["## Verified cache artifacts (extension)"];
-  if (files.length === 0) {
-    lines.push("- (none fetched)");
-  } else {
-    for (const file of files) {
-      const source = `${file.repo}:${file.remotePath}@${file.sha ?? file.ref ?? "unknown-ref"}`;
-      lines.push(`- \`${file.localPath}\` ← \`${source}\``);
-    }
-  }
-
-  lines.push("", "## Verification status (extension)");
-  if (hasRead) lines.push("- Evidence line ranges were validated from local cached files via `read`.");
-  else lines.push("- No successful `read` call occurred; treat any line-range claims above as unverified.");
-
-  return lines.join("\n");
-}
 
 function createTurnBudgetExtension(maxTurns: number): ExtensionFactory {
   return (pi) => {
@@ -119,41 +95,10 @@ export default function librarianExtension(pi: ExtensionAPI) {
         );
         const maxTurns = clampNumber((params as any).maxTurns, 3, 20, DEFAULT_MAX_TURNS);
 
-        const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "pi-librarian-"));
+        const workspaceBase = "/tmp/pi-librarian";
+        await fs.mkdir(workspaceBase, { recursive: true });
+        const workspace = await fs.mkdtemp(path.join(workspaceBase, "run-"));
         await fs.mkdir(path.join(workspace, "repos"), { recursive: true });
-
-        const manifestPath = path.join(workspace, "manifest.json");
-        const cachedByKey = new Map<string, CachedFile>();
-
-        const writeManifest = async () => {
-          const files = [...cachedByKey.values()].sort((a, b) => a.localPath.localeCompare(b.localPath));
-          await fs.writeFile(
-            manifestPath,
-            JSON.stringify(
-              {
-                workspace,
-                generatedAt: new Date().toISOString(),
-                files,
-              },
-              null,
-              2,
-            ),
-          );
-        };
-
-        try {
-          await ensureGithubAuth(pi, workspace, signal);
-        } catch (error) {
-          const message =
-            error instanceof Error
-              ? `${error.message}\n\nAuthenticate GitHub CLI first: gh auth login`
-              : "GitHub CLI authentication check failed. Run: gh auth login";
-          return {
-            content: [{ type: "text", text: message }],
-            details: { status: "error", workspace, runs: [] } satisfies LibrarianDetails,
-            isError: true,
-          };
-        }
 
         const runs: LibrarianRunDetails[] = [
           {
@@ -161,7 +106,6 @@ export default function librarianExtension(pi: ExtensionAPI) {
             query,
             turns: 0,
             toolCalls: [],
-            cachedFiles: [],
             startedAt: Date.now(),
           },
         ];
@@ -214,14 +158,6 @@ export default function librarianExtension(pi: ExtensionAPI) {
               runs,
             } satisfies LibrarianDetails,
           });
-        };
-
-        const upsertCachedFile = async (file: CachedFile) => {
-          const key = `${file.repo}:${file.remotePath}:${file.sha ?? file.ref ?? ""}`;
-          cachedByKey.set(key, file);
-          runs[0].cachedFiles = [...cachedByKey.values()].sort((a, b) => a.localPath.localeCompare(b.localPath));
-          await writeManifest();
-          emitAll(true);
         };
 
         emitAll(true);
@@ -300,9 +236,6 @@ export default function librarianExtension(pi: ExtensionAPI) {
           run.error = undefined;
           run.summaryText = undefined;
 
-          const githubCodeSearchTool = createGithubCodeSearchTool(pi, workspace);
-          const githubFetchFileTool = createGithubFetchFileTool(pi, workspace, upsertCachedFile);
-
           const { session: createdSession } = await createAgentSession({
             cwd: workspace,
             modelRegistry,
@@ -311,7 +244,6 @@ export default function librarianExtension(pi: ExtensionAPI) {
             model: subModel,
             thinkingLevel: subagentThinkingLevel,
             tools: [createReadTool(workspace), createBashTool(workspace)],
-            customTools: [githubCodeSearchTool, githubFetchFileTool],
           });
 
           session = createdSession;
@@ -355,17 +287,13 @@ export default function librarianExtension(pi: ExtensionAPI) {
           run.summaryText = getLastAssistantText(session.state.messages as any[]).trim();
           if (!run.summaryText) run.summaryText = wasAborted() ? "Aborted" : "(no output)";
           run.status = wasAborted() ? "aborted" : "done";
-          run.cachedFiles = [...cachedByKey.values()].sort((a, b) => a.localPath.localeCompare(b.localPath));
-          run.summaryText = `${run.summaryText.trim()}\n\n${buildVerifiedAppendix(run)}`;
           run.endedAt = Date.now();
-          await writeManifest();
           emitAll(true);
         } catch (error) {
           const message = wasAborted() ? "Aborted" : error instanceof Error ? error.message : String(error);
           run.status = wasAborted() ? "aborted" : "error";
           run.error = wasAborted() ? undefined : message;
           run.summaryText = message;
-          run.cachedFiles = [...cachedByKey.values()].sort((a, b) => a.localPath.localeCompare(b.localPath));
           run.endedAt = Date.now();
           emitAll(true);
         } finally {
@@ -427,7 +355,6 @@ export default function librarianExtension(pi: ExtensionAPI) {
       const run = details.runs[0];
       const totalToolCalls = run?.toolCalls.length ?? 0;
       const totalTurns = run?.turns ?? 0;
-      const cachedCount = run?.cachedFiles.length ?? 0;
 
       const selectionSummary = details.subagentSelection
         ? `${details.subagentSelection.authMode}/${details.subagentSelection.authSource}`
@@ -439,7 +366,7 @@ export default function librarianExtension(pi: ExtensionAPI) {
         theme.fg("toolTitle", theme.bold("librarian ")) +
         theme.fg(
           "dim",
-          `${details.subagentProvider ?? "?"}/${details.subagentModelId ?? "?"} • ${selectionSummary} • ${totalTurns} turns • ${totalToolCalls} tool call${totalToolCalls === 1 ? "" : "s"} • ${cachedCount} cached file${cachedCount === 1 ? "" : "s"}`,
+          `${details.subagentProvider ?? "?"}/${details.subagentModelId ?? "?"} • ${selectionSummary} • ${totalTurns} turns • ${totalToolCalls} tool call${totalToolCalls === 1 ? "" : "s"}`,
         );
 
       const workspaceLine = details.workspace

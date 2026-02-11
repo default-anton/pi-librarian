@@ -22,23 +22,11 @@ export type ToolCall = {
   isError?: boolean;
 };
 
-export interface CachedFile {
-  repo: string;
-  remotePath: string;
-  ref?: string;
-  sha?: string;
-  localPath: string;
-  bytes: number;
-  lines: number;
-  fetchedAt: number;
-}
-
 export interface LibrarianRunDetails {
   status: LibrarianStatus;
   query: string;
   turns: number;
   toolCalls: ToolCall[];
-  cachedFiles: CachedFile[];
   summaryText?: string;
   error?: string;
   startedAt: number;
@@ -58,14 +46,6 @@ export interface LibrarianDetails {
   subagentModelId?: string;
   subagentSelection?: SubagentSelectionInfo;
   runs: LibrarianRunDetails[];
-}
-
-export interface GithubCodeSearchResult {
-  repository: string;
-  path: string;
-  sha: string;
-  url: string;
-  snippets: string[];
 }
 
 export const LibrarianParams = Type.Object({
@@ -106,21 +86,6 @@ export const LibrarianParams = Type.Object({
   ),
 });
 
-export const GithubCodeSearchParams = Type.Object({
-  query: Type.String({ description: "GitHub code search query" }),
-  repos: Type.Optional(Type.Array(Type.String(), { maxItems: 30 })),
-  owners: Type.Optional(Type.Array(Type.String(), { maxItems: 30 })),
-  limit: Type.Optional(Type.Number({ minimum: 1, maximum: 100, default: DEFAULT_MAX_SEARCH_RESULTS })),
-  match: Type.Optional(Type.String({ description: 'Optional match filter: "file" or "path"' })),
-});
-
-export const GithubFetchFileParams = Type.Object({
-  repo: Type.String({ description: "Repository in owner/repo format" }),
-  path: Type.String({ description: "Path to file in repository" }),
-  ref: Type.Optional(Type.String({ description: "Git ref (branch/tag/commit)" })),
-  sha: Type.Optional(Type.String({ description: "Blob SHA for precise fetch" })),
-});
-
 function getEventTargetMaxListenersState(): EventTargetMaxListenersState {
   const g = globalThis as any;
   if (!g[EVENTTARGET_MAX_LISTENERS_STATE_KEY]) g[EVENTTARGET_MAX_LISTENERS_STATE_KEY] = { depth: 0 };
@@ -132,7 +97,7 @@ export function bumpDefaultEventTargetMaxListeners(): () => void {
 
   const raw = process.env.PI_EVENTTARGET_MAX_LISTENERS ?? process.env.PI_ABORT_MAX_LISTENERS;
   const desired = raw !== undefined ? Number(raw) : DEFAULT_EVENTTARGET_MAX_LISTENERS;
-  if (!Number.isFinite(desired) || desired < 0) return () => {};
+  if (!Number.isFinite(desired) || desired < 0) return () => { };
 
   if (state.depth === 0) state.savedDefault = events.defaultMaxListeners;
   state.depth += 1;
@@ -205,21 +170,6 @@ export function renderCombinedMarkdown(runs: LibrarianRunDetails[]): string {
 export function formatToolCall(call: ToolCall): string {
   const args = call.args && typeof call.args === "object" ? (call.args as Record<string, any>) : undefined;
 
-  if (call.name === "github_code_search") {
-    const query = typeof args?.query === "string" ? args.query : "";
-    const repos = Array.isArray(args?.repos) ? args.repos.length : 0;
-    const owners = Array.isArray(args?.owners) ? args.owners.length : 0;
-    const limit = typeof args?.limit === "number" ? args.limit : DEFAULT_MAX_SEARCH_RESULTS;
-    return `github_code_search "${shorten(query.replace(/\s+/g, " ").trim(), 70)}" (limit ${limit}, repos ${repos}, owners ${owners})`;
-  }
-
-  if (call.name === "github_fetch_file") {
-    const repo = typeof args?.repo === "string" ? args.repo : "?";
-    const remotePath = typeof args?.path === "string" ? args.path : "?";
-    const ref = typeof args?.ref === "string" && args.ref.trim() ? `@${shorten(args.ref, 16)}` : "";
-    return `github_fetch_file ${repo}:${shorten(remotePath, 80)}${ref}`;
-  }
-
   if (call.name === "read") {
     const p = typeof args?.path === "string" ? args.path : "";
     const offset = typeof args?.offset === "number" ? args.offset : undefined;
@@ -242,47 +192,80 @@ export function formatToolCall(call: ToolCall): string {
 export function buildLibrarianSystemPrompt(maxTurns: number, workspace: string, defaultLimit: number): string {
   return [
     "You are Librarian, a GitHub code intelligence subagent.",
-    "Your mission: find relevant code in public/private GitHub repos efficiently, cache only the files needed, and answer with citations.",
+    "Your mission: find relevant code in public/private GitHub repos efficiently with gh CLI, cache only the files needed, and answer with citations.",
     "",
     "You have these tools:",
-    "- github_code_search: indexed GitHub code search (fast, broad).",
-    "- github_fetch_file: fetch a single repository file into local cache.",
-    "- read: inspect cached files with line ranges for precise citations.",
-    "- bash: optional refinement (`rg`, `fd`, `ls`) against cached files only.",
+    "- bash: run gh/jq/rg/fd/ls/cp/mkdir commands.",
+    "- read: inspect cached files with exact line ranges for citations.",
     "",
     `Workspace: ${workspace}`,
-    `Default search limit: ${defaultLimit}`,
+    `Default gh search limit: ${defaultLimit}`,
     `Turn budget: at most ${maxTurns} turns (hard cap).`,
     "",
     "Non-negotiable behavior:",
-    "- Start with github_code_search before expensive operations.",
-    "- For large repositories, avoid cloning. Fetch only targeted files via github_fetch_file.",
+    "- Use gh commands directly. Do not clone repositories unless explicitly requested.",
+    "- Never write outside workspace. Cache files under `repos/<owner>/<repo>/<path>` (relative to workspace).",
     "- Cache only files needed to prove your answer.",
     "- Never paste full files. Prefer paths + line ranges + tiny snippets.",
     "- Keep snippets short (~5-15 lines).",
-    "- Only mention local cached paths that were actually returned by github_fetch_file in this run.",
-    "- Evidence line ranges must come from explicit read calls over cached files.",
-    "- If evidence is insufficient, say so and list the next narrow search.",
+    "- Evidence line ranges must come from explicit read calls on cached local files.",
+    "- Do not treat `gh search code` snippets (`textMatches`) as evidence by themselves.",
+    "- Every evidence citation must reference a downloaded cached file path.",
+    "- If evidence is insufficient, say so and list the next narrow search/fetch.",
     "",
-    "Workflow:",
-    "1) Run github_code_search with tight query terms and optional repo/owner filters.",
-    "2) Select highest-signal matches and run github_fetch_file for those paths.",
-    "3) Use read (and optionally bash rg -n) on cached files to get exact line ranges.",
-    "4) Do not publish Evidence line ranges unless step 3 happened for those files.",
-    "5) Return concise findings with both GitHub and local cache paths.",
+    "Budget strategy:",
+    "- Reserve the final turn for synthesis only (no tool calls on final turn).",
+    "- Prefer fewer high-signal tool calls over broad trial-and-error.",
+    "- Start with a small candidate batch (typically 3-6 files), then expand only if ambiguity remains.",
+    "",
+    "Discovery modes (choose based on query quality):",
+    "- Keyword-driven: when symbols/names are known, start with `gh search code`.",
+    "- Structure-driven: when names are unknown, start by mapping tree/directories, then narrow.",
+    "- Mixed: combine both when partial names/context are available.",
+    "",
+    "Known-good gh command patterns (prefer these templates; substitute placeholders):",
+    "Set variables first when needed: REPO='owner/repo'; REF='branch-or-sha'; DIR='src'; FILE='path/to/file'.",
+    "0) Resolve default branch when REF is unknown:",
+    "   gh repo view \"$REPO\" --json defaultBranchRef --jq '.defaultBranchRef.name'",
+    `1) Code search (public or private): gh search code '<terms>' --json path,repository,sha,url,textMatches --limit ${defaultLimit}`,
+    "   Optional scoping: add `--repo owner/repo` and/or `--owner owner`.",
+    "2) Repo tree (fast global map): gh api \"repos/$REPO/git/trees/$REF?recursive=1\" > tree.json",
+    "3) List files in a directory from tree JSON:",
+    "   jq -r '.tree[] | select(.type==\"blob\" and (.path | startswith(\"src/\"))) | .path' tree.json | head",
+    "4) List direct entries in a directory via contents API (good for structure-first discovery):",
+    "   gh api \"repos/$REPO/contents/$DIR?ref=$REF\" --jq '.[] | [.type, .path] | @tsv'",
+    "   For repo root, use: gh api \"repos/$REPO/contents?ref=$REF\" --jq '.[] | [.type, .path] | @tsv'",
+    "5) Fetch a file to local cache (base64 decode):",
+    "   mkdir -p \"repos/$REPO/$(dirname \"$FILE\")\"",
+    "   gh api \"repos/$REPO/contents/$FILE?ref=$REF\" --jq .content | tr -d '\\n' | base64 --decode > \"repos/$REPO/$FILE\"",
+    "6) Refine locally after caching: rg -n '<pattern>' \"repos/$REPO\"",
+    "7) Get precise evidence ranges: use read on the cached absolute path, then cite `path:start-end`.",
+    "",
+    "Private repositories:",
+    "- Use the same gh commands. If access is missing, gh returns 404/403; report that constraint clearly.",
+    "",
+    "Workflow (adaptive, not strictly linear):",
+    "1) Choose discovery mode (keyword-driven, structure-driven, or mixed).",
+    "2) Gather candidate files quickly with minimal calls.",
+    "3) Fetch only high-signal files into `repos/...` within workspace.",
+    "4) Use read on cached files to extract exact line ranges.",
+    "5) Stop once evidence is sufficient; avoid over-fetching.",
+    "6) Return concise findings with both GitHub and local cache paths.",
     "",
     "Output format (Markdown, exact section order):",
     "## Summary",
     "(1-3 sentences)",
-    "## Findings",
-    "- `owner/repo:path` — what it contains",
-    "## Cached files",
-    "- `absolute/local/path` ← `owner/repo:path@ref-or-sha`",
+    "## Locations",
+    "- `absolute/local/path` or `absolute/local/path:lineStart-lineEnd` — what is here and why it matters",
     "- If no files were fetched, write `(none)`",
     "## Evidence",
-    "- `absolute/local/path:lineStart-lineEnd` (GitHub URL) — concise snippet/point",
-    "## Searched",
-    "- Queries and filters you used",
+    "- Snippets with paths (optionally with line ranges) citing only cached files from this run, formatted as:",
+    "```path/to/file:lineStart-lineEnd",
+    "code snippet here",
+    "```",
+    "- Evidence must only cite downloaded/cached files from this run",
+    "## Searched (only if incomplete / not found)",
+    "- Queries, filters, and directory/tree probes you used",
     "## Next steps (optional)",
     "- What to fetch/check if ambiguity remains",
   ].join("\n");
@@ -303,8 +286,9 @@ export function buildLibrarianUserPrompt(
     `Query: ${query}`,
     `Repository filters: ${repoLine}`,
     `Owner filters: ${ownerLine}`,
-    `Max search results per github_code_search call: ${maxSearchResults}`,
+    `Max search results per gh search call: ${maxSearchResults}`,
+    `Always pass --limit ${maxSearchResults} to gh search code unless user asks otherwise.`,
     "",
-    "Important: keep output concise, citation-heavy, and path-first.",
+    "Important: keep output concise, citation-heavy, path-first, and cite only downloaded/cached files.",
   ].join("\n");
 }

@@ -3,7 +3,7 @@
 - Keep this package dependency-light. Do not add runtime dependencies unless strictly necessary.
 - `extensions/index.ts` is the only extension entrypoint; keep orchestration there.
 - Model routing policy lives in `extensions/model-selection.ts` (source of truth).
-- Selection diagnostics contract lives in `extensions/shared.ts` (`subagentSelection`). Keep it tight: `authMode`, `authSource`, `reason`.
+- Selection diagnostics contract lives in `extensions/librarian-core.ts` (`subagentSelection`). Keep it tight: `authMode`, `authSource`, `reason`.
 
 ## Required validation
 
