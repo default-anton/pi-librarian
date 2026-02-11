@@ -32,7 +32,7 @@ pi -e git:github.com/default-anton/pi-librarian
 - Instructs the subagent to use `gh` directly for search/tree/fetch workflows.
 - Caches only selected files in an isolated temporary workspace under `/tmp/pi-librarian/run-*/repos/...`.
 - Returns the subagent's final Markdown answer as-is (no extension-side post-processing).
-- Selects subagent model dynamically based on current model auth mode (OAuth vs API key) via shared package `pi-subagent-model-selection`.
+- Selects subagent model via shared package [`pi-subagent-model-selection`](https://github.com/default-anton/pi-subagent-model-selection).
 - Emits compact selection diagnostics (`authMode`, `authSource`, `reason`) in tool details.
 
 ## Tool interface
@@ -48,8 +48,9 @@ librarian({
 
 ## Model selection policy
 
-Librarian delegates model selection to `pi-subagent-model-selection`.
-The policy definition and its test suite live only in that shared package.
+Source of truth: https://github.com/default-anton/pi-subagent-model-selection
+
+This repository intentionally references that package instead of duplicating policy details.
 
 ## gh workflow examples (tested)
 
