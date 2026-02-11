@@ -51,9 +51,10 @@ export interface LibrarianDetails {
 export const LibrarianParams = Type.Object({
   query: Type.String({
     description: [
-      "Describe what to find in GitHub repositories.",
-      "Include: target behavior/symbols, any repository scope hints, and desired output.",
-      "The librarian should return paths and line ranges, not full file dumps.",
+      "Describe exactly what to find in GitHub code.",
+      "Include known context in the query when you have it (e.g. symbols/behavior, repo or owner hints, ref/branch hints, path hints, and desired output).",
+      "Do not guess unknown details; if scope is uncertain, say that explicitly and let Librarian discover it.",
+      "The librarian returns concise path-first findings with line-ranged evidence from downloaded files.",
     ].join("\n"),
   }),
   repos: Type.Optional(
@@ -74,14 +75,6 @@ export const LibrarianParams = Type.Object({
       minimum: 1,
       maximum: 100,
       default: DEFAULT_MAX_SEARCH_RESULTS,
-    }),
-  ),
-  maxTurns: Type.Optional(
-    Type.Number({
-      description: `Maximum subagent turns (3-20, default ${DEFAULT_MAX_TURNS})`,
-      minimum: 3,
-      maximum: 20,
-      default: DEFAULT_MAX_TURNS,
     }),
   ),
 });

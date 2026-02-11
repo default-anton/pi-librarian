@@ -64,7 +64,7 @@ Output format (Markdown, exact section order):
 ## Summary
 (1-3 sentences)
 ## Locations
-- \`absolute/local/path\` or \`absolute/local/path:lineStart-lineEnd\` — what is here and why it matters
+- \`absolute/local/path\` or \`absolute/local/path:lineStart-lineEnd\` — what is here and why it matters; include GitHub blob/tree URL in the same bullet by default
 - If no files were fetched, write \`(none)\`
 ## Evidence
 - Snippets with paths (optionally with line ranges) citing only cached files from this run, formatted as:

@@ -26,8 +26,8 @@ pi -e git:github.com/default-anton/pi-librarian
 
 ## What it does
 
-- Registers a `librarian` tool.
-- Runs a dedicated subagent session with a strict turn budget.
+- Registers a `librarian` tool for GitHub code investigation via `gh`, using known query context when provided (without guessing unknown scope).
+- Runs a dedicated subagent session with a strict fixed turn budget (10 turns).
 - Uses only `bash` + `read` tools in the subagent.
 - Instructs the subagent to use `gh` directly for search/tree/fetch workflows.
 - Caches only selected files in an isolated temporary workspace under `/tmp/pi-librarian/run-*/repos/...`.
@@ -43,7 +43,6 @@ librarian({
   repos?: string[],
   owners?: string[],
   maxSearchResults?: number,
-  maxTurns?: number,
 })
 ```
 

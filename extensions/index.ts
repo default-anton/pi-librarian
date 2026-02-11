@@ -66,7 +66,7 @@ export default function librarianExtension(pi: ExtensionAPI) {
     name: "librarian",
     label: "Librarian",
     description:
-      "GitHub research subagent: searches public/private repos via gh, caches only relevant files, and returns path-first citations with line ranges.",
+      "GitHub research subagent: investigates public/private repos via gh, using known query context when provided (without guessing unknown scope), caches only relevant files, and returns path-first citations with line ranges.",
     parameters: LibrarianParams,
 
     async execute(_toolCallId, params, signal, onUpdate, ctx: ExtensionContext) {
@@ -92,7 +92,7 @@ export default function librarianExtension(pi: ExtensionAPI) {
           100,
           DEFAULT_MAX_SEARCH_RESULTS,
         );
-        const maxTurns = clampNumber((params as any).maxTurns, 3, 20, DEFAULT_MAX_TURNS);
+        const maxTurns = DEFAULT_MAX_TURNS;
 
         const workspaceBase = "/tmp/pi-librarian";
         await fs.mkdir(workspaceBase, { recursive: true });

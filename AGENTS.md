@@ -4,6 +4,7 @@
 - `extensions/index.ts` is the only extension entrypoint; keep orchestration there.
 - Model routing policy lives in `extensions/model-selection.ts` (source of truth).
 - Selection diagnostics contract lives in `extensions/librarian-core.ts` (`subagentSelection`). Keep it tight: `authMode`, `authSource`, `reason`.
+- Librarian turn budget is fixed at 10 (`DEFAULT_MAX_TURNS`); do not expose `maxTurns` as a tool parameter.
 
 ## Required validation
 
