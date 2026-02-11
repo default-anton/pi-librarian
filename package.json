@@ -1,6 +1,6 @@
 {
   "name": "pi-librarian",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "GitHub research subagent package for pi coding agent",
   "type": "module",
   "keywords": [
