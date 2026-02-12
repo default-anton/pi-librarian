@@ -1,6 +1,6 @@
 {
   "name": "pi-librarian",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "GitHub research subagent package for pi coding agent",
   "type": "module",
   "keywords": [
@@ -38,7 +38,7 @@
     "@sinclair/typebox": "*"
   },
   "dependencies": {
-    "pi-subagent-model-selection": "^0.1.1"
+    "pi-subagent-model-selection": "^0.1.2"
   },
   "files": [
     "extensions/",
