@@ -1,6 +1,6 @@
 {
   "name": "pi-librarian",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "GitHub research subagent package for pi coding agent",
   "type": "module",
   "keywords": [
@@ -27,6 +27,9 @@
   },
   "scripts": {
     "pack:check": "npm pack --dry-run",
+    "release:verify-tag": "node scripts/verify-release-tag.mjs",
+    "release:notes": "node scripts/changelog-release-notes.mjs",
+    "release:gate": "npm run pack:check",
     "prepublishOnly": "npm run pack:check"
   },
   "publishConfig": {
