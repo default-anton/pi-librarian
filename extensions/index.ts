@@ -66,7 +66,7 @@ export default function librarianExtension(pi: ExtensionAPI) {
     name: "librarian",
     label: "Librarian",
     description:
-      "GitHub research subagent: investigates public/private repos via gh, using known query context when provided (without guessing unknown scope), caches only relevant files, and returns path-first citations with line ranges.",
+      "GitHub research scout for coding and personal-assistant tasks. Use when the answer likely lives in GitHub repos, exact repo/path locations are unknown, or you'd otherwise do exploratory gh search/tree probes plus ls/rg/fd/find/grep/read on fetched files. Librarian performs targeted reconnaissance in an isolated workspace and returns concise, path-first findings with line-ranged evidence.",
     parameters: LibrarianParams,
 
     async execute(_toolCallId, params, signal, onUpdate, ctx: ExtensionContext) {
