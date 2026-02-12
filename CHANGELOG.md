@@ -23,7 +23,7 @@ All notable changes to `pi-librarian` are documented here.
 
 - None.
 
-## [1.0.7] - 2026-02-12
+## [1.0.8] - 2026-02-12
 
 ### Added
 
@@ -38,4 +38,4 @@ All notable changes to `pi-librarian` are documented here.
 
 ### Fixed
 
-- None.
+- Synced `package-lock.json` with `package.json` dependency range so CI `npm ci` passes reliably.
