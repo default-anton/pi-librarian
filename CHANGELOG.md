@@ -23,6 +23,21 @@ All notable changes to `pi-librarian` are documented here.
 
 - None.
 
+## [1.1.1] - 2026-02-13
+
+### Added
+
+- None.
+
+### Changed
+
+- Updated peer dependencies `@mariozechner/pi-coding-agent` and `@mariozechner/pi-tui` to `^0.52.12`.
+- Bumped internal dependency `pi-subagent-model-selection` from `^0.1.3` to `^0.1.4`.
+
+### Fixed
+
+- None.
+
 ## [1.1.0] - 2026-02-13
 
 ### Added
