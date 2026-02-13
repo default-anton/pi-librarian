@@ -23,6 +23,20 @@ All notable changes to `pi-librarian` are documented here.
 
 - None.
 
+## [1.1.0] - 2026-02-13
+
+### Added
+
+- None.
+
+### Changed
+
+- Tightened Librarian system/user prompts with Finder-style task framing and execution guidance: evidence-first opening, direct-response behavior, clearer default search modes, and concise evidence rules while keeping cached-file citations strict for code-content claims.
+
+### Fixed
+
+- None.
+
 ## [1.0.9] - 2026-02-12
 
 ### Added
