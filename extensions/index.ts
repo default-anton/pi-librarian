@@ -136,6 +136,48 @@ function selectLibrarianSubagentModel(
   };
 }
 
+function isQuotaError(error: unknown): boolean {
+  const msg = (error instanceof Error ? error.message : String(error)).toLowerCase();
+  return (
+    msg.includes("rate limit") ||
+    msg.includes("rate_limit") ||
+    msg.includes("quota") ||
+    msg.includes("429") ||
+    msg.includes("insufficient_quota") ||
+    msg.includes("exceeded your current quota") ||
+    msg.includes("out of credits") ||
+    msg.includes("billing")
+  );
+}
+
+function selectLibrarianFallbackModel(
+  modelRegistry: ExtensionContext["modelRegistry"],
+  primaryModelId: string,
+): LibrarianSubagentModelSelection | null {
+  const rawFallback = (process.env.PI_LIBRARIAN_FALLBACK_MODEL ?? "anthropic/claude-sonnet-4-6:high").trim();
+  if (!rawFallback) return null;
+
+  const parsed = parseLibrarianModelOverride(rawFallback);
+  if ("error" in parsed) return null;
+
+  const provider = parsed.value.provider.toLowerCase();
+  const modelId = parsed.value.modelId.toLowerCase();
+
+  // Don't fall back to the same model we already tried
+  if (modelId === primaryModelId.toLowerCase()) return null;
+
+  const selectedModel = modelRegistry
+    .getAvailable()
+    .find((c) => c.provider.toLowerCase() === provider && c.id.toLowerCase() === modelId);
+  if (!selectedModel) return null;
+
+  return {
+    model: selectedModel,
+    thinkingLevel: parsed.value.thinkingLevel,
+    reason: `fallback (quota): ${selectedModel.provider}/${selectedModel.id}:${parsed.value.thinkingLevel}`,
+  };
+}
+
 function createTurnBudgetExtension(maxTurns: number): ExtensionFactory {
   return (pi) => {
     let turnIndex = 0;
@@ -238,11 +280,12 @@ export default function librarianExtension(pi: ExtensionAPI) {
           };
         }
 
-        const subModel = subModelSelection.model;
-        const subagentThinkingLevel = subModelSelection.thinkingLevel;
-        const subagentSelection = {
+        let subModel = subModelSelection.model;
+        let subagentThinkingLevel = subModelSelection.thinkingLevel;
+        let subagentSelection: SubagentSelectionInfo = {
           reason: subModelSelection.reason,
-        } as const;
+        };
+        const fallbackSelection = selectLibrarianFallbackModel(modelRegistry, subModel.id);
 
         let lastUpdate = 0;
         const emitAll = (force = false) => {
@@ -321,7 +364,27 @@ export default function librarianExtension(pi: ExtensionAPI) {
         let session: any;
         let unsubscribe: (() => void) | undefined;
 
-        try {
+        const looksLikeSilentQuotaFailure = (r: typeof run) =>
+          r.status === "done" && r.toolCalls.length === 0 && (!r.summaryText || r.summaryText === "(no output)");
+
+        const runOneAttempt = async (attemptModel: LibrarianSubagentModel, attemptThinking: ThinkingLevel) => {
+          // Clean up any previous attempt's session before starting a new one
+          if (session) {
+            activeSessions.delete(session as any);
+            unsubscribe?.();
+            session.dispose();
+            session = undefined;
+            unsubscribe = undefined;
+          }
+
+          run.status = "running";
+          run.turns = 0;
+          run.toolCalls = [];
+          run.startedAt = Date.now();
+          run.endedAt = undefined;
+          run.error = undefined;
+          run.summaryText = undefined;
+
           const resourceLoader = new DefaultResourceLoader({
             noExtensions: true,
             additionalExtensionPaths: ["npm:pi-subdir-context"],
@@ -334,21 +397,13 @@ export default function librarianExtension(pi: ExtensionAPI) {
           });
           await resourceLoader.reload();
 
-          run.status = "running";
-          run.turns = 0;
-          run.toolCalls = [];
-          run.startedAt = Date.now();
-          run.endedAt = undefined;
-          run.error = undefined;
-          run.summaryText = undefined;
-
           const { session: createdSession } = await createAgentSession({
             cwd: workspace,
             modelRegistry,
             resourceLoader,
             sessionManager: SessionManager.inMemory(workspace),
-            model: subModel,
-            thinkingLevel: subagentThinkingLevel,
+            model: attemptModel,
+            thinkingLevel: attemptThinking,
             tools: [createReadTool(workspace), createBashTool(workspace)],
           });
 
@@ -395,6 +450,31 @@ export default function librarianExtension(pi: ExtensionAPI) {
           run.status = wasAborted() ? "aborted" : "done";
           run.endedAt = Date.now();
           emitAll(true);
+        };
+
+        try {
+          try {
+            await runOneAttempt(subModel, subagentThinkingLevel);
+            // Detect silent quota exhaustion: model ran, made no tool calls, returned nothing
+            if (!wasAborted() && fallbackSelection && looksLikeSilentQuotaFailure(run)) {
+              subModel = fallbackSelection.model;
+              subagentThinkingLevel = fallbackSelection.thinkingLevel;
+              subagentSelection = { reason: `${fallbackSelection.reason} (silent quota)` };
+              emitAll(true);
+              await runOneAttempt(subModel, subagentThinkingLevel);
+            }
+          } catch (primaryError) {
+            if (!wasAborted() && fallbackSelection && isQuotaError(primaryError)) {
+              // Switch to fallback model and retry
+              subModel = fallbackSelection.model;
+              subagentThinkingLevel = fallbackSelection.thinkingLevel;
+              subagentSelection = { reason: fallbackSelection.reason };
+              emitAll(true);
+              await runOneAttempt(subModel, subagentThinkingLevel);
+            } else {
+              throw primaryError;
+            }
+          }
         } catch (error) {
           const message = wasAborted() ? "Aborted" : error instanceof Error ? error.message : String(error);
           run.status = wasAborted() ? "aborted" : "error";

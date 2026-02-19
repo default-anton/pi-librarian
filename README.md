@@ -68,6 +68,26 @@ export PI_LIBRARIAN_MODEL=google-antigravity/gemini-3-flash:low
 - The requested model must exist in `modelRegistry.getAvailable()` (i.e. credentials are configured for that provider/model).
 - In override mode, selection diagnostics report an explicit `reason` including the chosen `provider/model:thinking`.
 
+## Quota fallback
+
+When the primary subagent model fails due to quota exhaustion or rate limits, Librarian automatically retries with a fallback model. Two failure modes are handled:
+
+- **Exception-based**: API returns a 429 / quota error that throws — detected via error message patterns.
+- **Silent failure**: Model runs but calls no tools and returns no output — detected by inspecting the completed run.
+
+The fallback model defaults to `anthropic/claude-sonnet-4-6:high` and can be overridden:
+
+```bash
+export PI_LIBRARIAN_FALLBACK_MODEL=anthropic/claude-opus-4-6:low
+```
+
+Format is the same as `PI_LIBRARIAN_MODEL`: `provider/model:thinking`.
+
+- Set `PI_LIBRARIAN_FALLBACK_MODEL=""` to disable fallback entirely.
+- The fallback model must be available in `modelRegistry.getAvailable()`.
+- If primary and fallback resolve to the same model ID, fallback is skipped.
+- Selection diagnostics report `fallback (quota): provider/model:thinking` when fallback is active.
+
 ## gh workflow examples (tested)
 
 These are the same patterns encoded in the librarian system prompt.

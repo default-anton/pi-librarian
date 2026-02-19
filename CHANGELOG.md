@@ -13,7 +13,7 @@ All notable changes to `pi-librarian` are documented here.
 
 ### Added
 
-- None.
+- Quota fallback: when the primary subagent model fails due to quota exhaustion or rate limits, Librarian automatically retries with a fallback model. Two failure modes are handled: exception-based (API throws 429/quota error) and silent failure (model completes with zero tool calls and no output). Fallback model defaults to `anthropic/claude-sonnet-4-6:high` and can be overridden via `PI_LIBRARIAN_FALLBACK_MODEL=provider/model:thinking`. Set to empty string to disable.
 
 ### Changed
 
