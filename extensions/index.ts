@@ -46,13 +46,13 @@ function parseLibrarianModelOverride(rawValue: string):
   | { value: { provider: string; modelId: string; thinkingLevel: LibrarianOverrideThinkingLevel } }
   | { error: string } {
   const value = rawValue.trim();
-  if (!value) return { error: "PI_LIBRARY_MODEL is empty." };
+  if (!value) return { error: "PI_LIBRARIAN_MODEL is empty." };
 
   const slashIndex = value.indexOf("/");
   if (slashIndex <= 0 || slashIndex === value.length - 1) {
     return {
       error:
-        `Invalid PI_LIBRARY_MODEL=\"${rawValue}\". Expected format \"provider/model:thinking\" ` +
+        `Invalid PI_LIBRARIAN_MODEL=\"${rawValue}\". Expected format \"provider/model:thinking\" ` +
         `where thinking is one of: ${VALID_OVERRIDE_THINKING_LEVELS.join(", ")}.`,
     };
   }
@@ -64,7 +64,7 @@ function parseLibrarianModelOverride(rawValue: string):
   if (thinkingSeparator <= 0 || thinkingSeparator === modelWithThinking.length - 1) {
     return {
       error:
-        `Invalid PI_LIBRARY_MODEL=\"${rawValue}\". Expected format \"provider/model:thinking\" ` +
+        `Invalid PI_LIBRARIAN_MODEL=\"${rawValue}\". Expected format \"provider/model:thinking\" ` +
         `where thinking is one of: ${VALID_OVERRIDE_THINKING_LEVELS.join(", ")}.`,
     };
   }
@@ -75,7 +75,7 @@ function parseLibrarianModelOverride(rawValue: string):
   if (!provider || !modelId) {
     return {
       error:
-        `Invalid PI_LIBRARY_MODEL=\"${rawValue}\". Provider/model must be non-empty and use ` +
+        `Invalid PI_LIBRARIAN_MODEL=\"${rawValue}\". Provider/model must be non-empty and use ` +
         `\"provider/model:thinking\" format.`,
     };
   }
@@ -83,7 +83,7 @@ function parseLibrarianModelOverride(rawValue: string):
   if (!VALID_OVERRIDE_THINKING_LEVELS.includes(thinking as LibrarianOverrideThinkingLevel)) {
     return {
       error:
-        `Invalid PI_LIBRARY_MODEL thinking level \"${thinking}\". Valid values: ` +
+        `Invalid PI_LIBRARIAN_MODEL thinking level \"${thinking}\". Valid values: ` +
         VALID_OVERRIDE_THINKING_LEVELS.join(", "),
     };
   }
@@ -101,7 +101,7 @@ function selectLibrarianSubagentModel(
   modelRegistry: ExtensionContext["modelRegistry"],
   currentModel: ExtensionContext["model"],
 ): { selection: LibrarianSubagentModelSelection | null; error?: string } {
-  const rawOverride = process.env.PI_LIBRARY_MODEL?.trim() ?? "";
+  const rawOverride = process.env.PI_LIBRARIAN_MODEL?.trim() ?? "";
   if (!rawOverride) {
     return {
       selection: getSmallModelFromProvider(modelRegistry, currentModel) as LibrarianSubagentModelSelection | null,
@@ -122,7 +122,7 @@ function selectLibrarianSubagentModel(
     return {
       selection: null,
       error:
-        `PI_LIBRARY_MODEL requested \"${parsed.value.provider}/${parsed.value.modelId}\", but that model is not available. ` +
+        `PI_LIBRARIAN_MODEL requested \"${parsed.value.provider}/${parsed.value.modelId}\", but that model is not available. ` +
         `Check credentials (/login or auth env vars) and verify provider/model ID.`,
     };
   }
@@ -131,7 +131,7 @@ function selectLibrarianSubagentModel(
     selection: {
       model: selectedModel,
       thinkingLevel: parsed.value.thinkingLevel,
-      reason: `env override: PI_LIBRARY_MODEL=${selectedModel.provider}/${selectedModel.id}:${parsed.value.thinkingLevel}`,
+      reason: `env override: PI_LIBRARIAN_MODEL=${selectedModel.provider}/${selectedModel.id}:${parsed.value.thinkingLevel}`,
     },
   };
 }

@@ -51,20 +51,20 @@ librarian({
 Default behavior delegates model selection to [`pi-subagent-model-selection`](https://github.com/default-anton/pi-subagent-model-selection) (shared with pi-finder).
 The policy definition and its test suite live only in that package.
 
-You can override the subagent model explicitly with `PI_LIBRARY_MODEL`:
+You can override the subagent model explicitly with `PI_LIBRARIAN_MODEL`:
 
 ```bash
-PI_LIBRARY_MODEL="provider/model:thinking"
+PI_LIBRARIAN_MODEL="provider/model:thinking"
 ```
 
 Concrete example:
 
 ```bash
-export PI_LIBRARY_MODEL=google-antigravity/gemini-3-flash:low
+export PI_LIBRARIAN_MODEL=google-antigravity/gemini-3-flash:low
 ```
 
 - `thinking` must be one of: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`.
-- When `PI_LIBRARY_MODEL` is set to a non-empty value, Librarian uses it instead of shared selection policy.
+- When `PI_LIBRARIAN_MODEL` is set to a non-empty value, Librarian uses it instead of shared selection policy.
 - The requested model must exist in `modelRegistry.getAvailable()` (i.e. credentials are configured for that provider/model).
 - In override mode, selection diagnostics report an explicit `reason` including the chosen `provider/model:thinking`.
 

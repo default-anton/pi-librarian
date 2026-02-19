@@ -23,6 +23,21 @@ All notable changes to `pi-librarian` are documented here.
 
 - None.
 
+## [1.2.1] - 2026-02-18
+
+### Added
+
+- None.
+
+### Changed
+
+- None.
+
+### Fixed
+
+- Renamed the explicit model-override environment variable from `PI_LIBRARY_MODEL` to `PI_LIBRARIAN_MODEL` across runtime parsing, validation errors, and diagnostics reason text.
+- Updated README override documentation and examples to use `PI_LIBRARIAN_MODEL`.
+
 ## [1.2.0] - 2026-02-18
 
 ### Added
