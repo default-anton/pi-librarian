@@ -27,9 +27,114 @@ import {
   shorten,
   type LibrarianDetails,
   type LibrarianRunDetails,
+  type SubagentSelectionInfo,
 } from "./librarian-core";
 import { buildLibrarianSystemPrompt, buildLibrarianUserPrompt } from "./librarian-prompts.md.ts";
-import { getSmallModelFromProvider } from "pi-subagent-model-selection";
+import { getSmallModelFromProvider, type ThinkingLevel } from "pi-subagent-model-selection";
+
+const VALID_OVERRIDE_THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
+
+type LibrarianOverrideThinkingLevel = (typeof VALID_OVERRIDE_THINKING_LEVELS)[number];
+type LibrarianSubagentModel = NonNullable<ExtensionContext["model"]>;
+
+type LibrarianSubagentModelSelection = {
+  model: LibrarianSubagentModel;
+  thinkingLevel: ThinkingLevel;
+} & SubagentSelectionInfo;
+
+function parseLibrarianModelOverride(rawValue: string):
+  | { value: { provider: string; modelId: string; thinkingLevel: LibrarianOverrideThinkingLevel } }
+  | { error: string } {
+  const value = rawValue.trim();
+  if (!value) return { error: "PI_LIBRARY_MODEL is empty." };
+
+  const slashIndex = value.indexOf("/");
+  if (slashIndex <= 0 || slashIndex === value.length - 1) {
+    return {
+      error:
+        `Invalid PI_LIBRARY_MODEL=\"${rawValue}\". Expected format \"provider/model:thinking\" ` +
+        `where thinking is one of: ${VALID_OVERRIDE_THINKING_LEVELS.join(", ")}.`,
+    };
+  }
+
+  const provider = value.slice(0, slashIndex).trim();
+  const modelWithThinking = value.slice(slashIndex + 1).trim();
+  const thinkingSeparator = modelWithThinking.lastIndexOf(":");
+
+  if (thinkingSeparator <= 0 || thinkingSeparator === modelWithThinking.length - 1) {
+    return {
+      error:
+        `Invalid PI_LIBRARY_MODEL=\"${rawValue}\". Expected format \"provider/model:thinking\" ` +
+        `where thinking is one of: ${VALID_OVERRIDE_THINKING_LEVELS.join(", ")}.`,
+    };
+  }
+
+  const modelId = modelWithThinking.slice(0, thinkingSeparator).trim();
+  const thinking = modelWithThinking.slice(thinkingSeparator + 1).trim().toLowerCase();
+
+  if (!provider || !modelId) {
+    return {
+      error:
+        `Invalid PI_LIBRARY_MODEL=\"${rawValue}\". Provider/model must be non-empty and use ` +
+        `\"provider/model:thinking\" format.`,
+    };
+  }
+
+  if (!VALID_OVERRIDE_THINKING_LEVELS.includes(thinking as LibrarianOverrideThinkingLevel)) {
+    return {
+      error:
+        `Invalid PI_LIBRARY_MODEL thinking level \"${thinking}\". Valid values: ` +
+        VALID_OVERRIDE_THINKING_LEVELS.join(", "),
+    };
+  }
+
+  return {
+    value: {
+      provider,
+      modelId,
+      thinkingLevel: thinking as LibrarianOverrideThinkingLevel,
+    },
+  };
+}
+
+function selectLibrarianSubagentModel(
+  modelRegistry: ExtensionContext["modelRegistry"],
+  currentModel: ExtensionContext["model"],
+): { selection: LibrarianSubagentModelSelection | null; error?: string } {
+  const rawOverride = process.env.PI_LIBRARY_MODEL?.trim() ?? "";
+  if (!rawOverride) {
+    return {
+      selection: getSmallModelFromProvider(modelRegistry, currentModel) as LibrarianSubagentModelSelection | null,
+    };
+  }
+
+  const parsed = parseLibrarianModelOverride(rawOverride);
+  if ("error" in parsed) return { selection: null, error: parsed.error };
+
+  const provider = parsed.value.provider.toLowerCase();
+  const modelId = parsed.value.modelId.toLowerCase();
+
+  const selectedModel = modelRegistry
+    .getAvailable()
+    .find((candidate) => candidate.provider.toLowerCase() === provider && candidate.id.toLowerCase() === modelId);
+
+  if (!selectedModel) {
+    return {
+      selection: null,
+      error:
+        `PI_LIBRARY_MODEL requested \"${parsed.value.provider}/${parsed.value.modelId}\", but that model is not available. ` +
+        `Check credentials (/login or auth env vars) and verify provider/model ID.`,
+    };
+  }
+
+  return {
+    selection: {
+      model: selectedModel,
+      thinkingLevel: parsed.value.thinkingLevel,
+      reason: `env override: PI_LIBRARY_MODEL=${selectedModel.provider}/${selectedModel.id}:${parsed.value.thinkingLevel}`,
+    },
+  };
+}
 
 function createTurnBudgetExtension(maxTurns: number): ExtensionFactory {
   return (pi) => {
@@ -110,10 +215,14 @@ export default function librarianExtension(pi: ExtensionAPI) {
         ];
 
         const modelRegistry = ctx.modelRegistry;
-        const subModelSelection = getSmallModelFromProvider(modelRegistry, ctx.model);
+        const { selection: subModelSelection, error: selectionError } = selectLibrarianSubagentModel(
+          modelRegistry,
+          ctx.model,
+        );
 
         if (!subModelSelection) {
-          const error = "No models available. Configure credentials (e.g. /login or auth.json) and try again.";
+          const error =
+            selectionError ?? "No models available. Configure credentials (e.g. /login or auth.json) and try again.";
           runs[0].status = "error";
           runs[0].error = error;
           runs[0].summaryText = error;
@@ -132,8 +241,6 @@ export default function librarianExtension(pi: ExtensionAPI) {
         const subModel = subModelSelection.model;
         const subagentThinkingLevel = subModelSelection.thinkingLevel;
         const subagentSelection = {
-          authMode: subModelSelection.authMode,
-          authSource: subModelSelection.authSource,
           reason: subModelSelection.reason,
         } as const;
 
@@ -355,17 +462,13 @@ export default function librarianExtension(pi: ExtensionAPI) {
       const totalToolCalls = run?.toolCalls.length ?? 0;
       const totalTurns = run?.turns ?? 0;
 
-      const selectionSummary = details.subagentSelection
-        ? `${details.subagentSelection.authMode}/${details.subagentSelection.authSource}`
-        : "?/?";
-
       const header =
         icon +
         " " +
         theme.fg("toolTitle", theme.bold("librarian ")) +
         theme.fg(
           "dim",
-          `${details.subagentProvider ?? "?"}/${details.subagentModelId ?? "?"} • ${selectionSummary} • ${totalTurns} turns • ${totalToolCalls} tool call${totalToolCalls === 1 ? "" : "s"}`,
+          `${details.subagentProvider ?? "?"}/${details.subagentModelId ?? "?"} • ${totalTurns} turns • ${totalToolCalls} tool call${totalToolCalls === 1 ? "" : "s"}`,
         );
 
       const workspaceLine = details.workspace

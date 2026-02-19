@@ -33,7 +33,7 @@ pi -e git:github.com/default-anton/pi-librarian
 - Caches only selected files in an isolated temporary workspace under `/tmp/pi-librarian/run-*/repos/...`.
 - Returns the subagent's final Markdown answer as-is (no extension-side post-processing).
 - Selects subagent model via shared package [`pi-subagent-model-selection`](https://github.com/default-anton/pi-subagent-model-selection).
-- Emits compact selection diagnostics (`authMode`, `authSource`, `reason`) in tool details.
+- Emits compact selection diagnostics (`reason`) in tool details.
 
 ## Tool interface
 
@@ -48,9 +48,25 @@ librarian({
 
 ## Model selection policy
 
-Source of truth: https://github.com/default-anton/pi-subagent-model-selection
+Default behavior delegates model selection to [`pi-subagent-model-selection`](https://github.com/default-anton/pi-subagent-model-selection) (shared with pi-finder).
+The policy definition and its test suite live only in that package.
 
-This repository intentionally references that package instead of duplicating policy details.
+You can override the subagent model explicitly with `PI_LIBRARY_MODEL`:
+
+```bash
+PI_LIBRARY_MODEL="provider/model:thinking"
+```
+
+Concrete example:
+
+```bash
+export PI_LIBRARY_MODEL=google-antigravity/gemini-3-flash:low
+```
+
+- `thinking` must be one of: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`.
+- When `PI_LIBRARY_MODEL` is set to a non-empty value, Librarian uses it instead of shared selection policy.
+- The requested model must exist in `modelRegistry.getAvailable()` (i.e. credentials are configured for that provider/model).
+- In override mode, selection diagnostics report an explicit `reason` including the chosen `provider/model:thinking`.
 
 ## gh workflow examples (tested)
 

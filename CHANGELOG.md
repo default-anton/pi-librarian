@@ -23,6 +23,20 @@ All notable changes to `pi-librarian` are documented here.
 
 - None.
 
+## [1.2.0] - 2026-02-18
+
+### Added
+
+- Added `PI_LIBRARY_MODEL` override (`provider/model:thinking`) for deterministic subagent model selection; when set and non-empty, Librarian bypasses `pi-subagent-model-selection`, uses the requested available model, and reports override diagnostics via explicit selection `reason`.
+
+### Changed
+
+- Simplified Librarian selection diagnostics payload to `reason` only and removed `authMode` / `authSource` from Librarian tool details and TUI rendering.
+
+### Fixed
+
+- None.
+
 ## [1.1.2] - 2026-02-17
 
 ### Added

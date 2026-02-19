@@ -34,8 +34,6 @@ export interface LibrarianRunDetails {
 }
 
 export interface SubagentSelectionInfo {
-  authMode: "oauth" | "api-key";
-  authSource: "runtime" | "api_key" | "oauth" | "env" | "fallback" | "none";
   reason: string;
 }
 
