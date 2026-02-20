@@ -17,7 +17,7 @@ All notable changes to `pi-librarian` are documented here.
 
 ### Changed
 
-- None.
+- **BREAKING:** Replaced shared `pi-subagent-model-selection` routing and single-model `PI_LIBRARIAN_MODEL` override with local deterministic ordered failover via `PI_LIBRARIAN_MODELS`, including availability-filtered `ctx.model` fallback, and temporary-unavailable cache with reason-aware TTLs (quota: 30m, other final failures: 10m). Migration guidance: see `README.md` → **Model selection policy** (switch `PI_LIBRARIAN_MODEL` to ordered `PI_LIBRARIAN_MODELS="provider/model:thinking,..."`).
 
 ### Fixed
 

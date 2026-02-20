@@ -32,7 +32,7 @@ pi -e git:github.com/default-anton/pi-librarian
 - Instructs the subagent to use `gh` directly for search/tree/fetch workflows.
 - Caches only selected files in an isolated temporary workspace under `/tmp/pi-librarian/run-*/repos/...`.
 - Returns the subagent's final Markdown answer as-is (no extension-side post-processing).
-- Selects subagent model via shared package [`pi-subagent-model-selection`](https://github.com/default-anton/pi-subagent-model-selection).
+- Selects subagent model via ordered `PI_LIBRARIAN_MODELS` failover with `ctx.model` fallback.
 - Emits compact selection diagnostics (`reason`) in tool details.
 
 ## Tool interface
@@ -48,25 +48,35 @@ librarian({
 
 ## Model selection policy
 
-Default behavior delegates model selection to [`pi-subagent-model-selection`](https://github.com/default-anton/pi-subagent-model-selection) (shared with pi-finder).
-The policy definition and its test suite live only in that package.
+Librarian uses local deterministic model routing with ordered failover.
 
-You can override the subagent model explicitly with `PI_LIBRARIAN_MODEL`:
+Configure candidates with `PI_LIBRARIAN_MODELS`:
 
 ```bash
-PI_LIBRARIAN_MODEL="provider/model:thinking"
+PI_LIBRARIAN_MODELS="provider/model:thinking,provider/model:thinking,..."
 ```
 
 Concrete example:
 
 ```bash
-export PI_LIBRARIAN_MODEL=google-antigravity/gemini-3-flash:low
+export PI_LIBRARIAN_MODELS="openai-codex/gpt-5.3-codex-spark:high,google-antigravity/gemini-3-flash:medium,anthropic/claude-sonnet-4-6:high"
 ```
 
+Rules:
+
 - `thinking` must be one of: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`.
-- When `PI_LIBRARIAN_MODEL` is set to a non-empty value, Librarian uses it instead of shared selection policy.
-- The requested model must exist in `modelRegistry.getAvailable()` (i.e. credentials are configured for that provider/model).
-- In override mode, selection diagnostics report an explicit `reason` including the chosen `provider/model:thinking`.
+- Tokens are parsed in order (comma-separated, trimmed, empty tokens ignored).
+- Each token is filtered by:
+  1. `ctx.modelRegistry.getAvailable()`
+  2. Librarian's in-memory temporary-unavailable cache (reason-aware TTL)
+- Librarian picks the first candidate passing both filters.
+- If `PI_LIBRARIAN_MODELS` is unset/blank, or no candidate passes filters, Librarian tries `ctx.model` fallback using the same availability + temporary-unavailable filters.
+- On any final non-abort model failure, Librarian fails over to the next available candidate.
+- Temporary-unavailable TTLs are:
+  - quota-like final failures: 30 minutes
+  - other final failures: 10 minutes
+- Librarian does not add its own retry/backoff loop for transient errors; SDK retry behavior remains the first-line retry mechanism.
+- Selection diagnostics stay compact and expose only `subagentSelection.reason`.
 
 ## gh workflow examples (tested)
 

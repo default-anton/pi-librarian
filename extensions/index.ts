@@ -30,111 +30,20 @@ import {
   type SubagentSelectionInfo,
 } from "./librarian-core";
 import { buildLibrarianSystemPrompt, buildLibrarianUserPrompt } from "./librarian-prompts.md.ts";
-import { getSmallModelFromProvider, type ThinkingLevel } from "pi-subagent-model-selection";
-
-const VALID_OVERRIDE_THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
-
-type LibrarianOverrideThinkingLevel = (typeof VALID_OVERRIDE_THINKING_LEVELS)[number];
-type LibrarianSubagentModel = NonNullable<ExtensionContext["model"]>;
-
-type LibrarianSubagentModelSelection = {
-  model: LibrarianSubagentModel;
-  thinkingLevel: ThinkingLevel;
-} & SubagentSelectionInfo;
-
-function parseLibrarianModelOverride(rawValue: string):
-  | { value: { provider: string; modelId: string; thinkingLevel: LibrarianOverrideThinkingLevel } }
-  | { error: string } {
-  const value = rawValue.trim();
-  if (!value) return { error: "PI_LIBRARIAN_MODEL is empty." };
-
-  const slashIndex = value.indexOf("/");
-  if (slashIndex <= 0 || slashIndex === value.length - 1) {
-    return {
-      error:
-        `Invalid PI_LIBRARIAN_MODEL=\"${rawValue}\". Expected format \"provider/model:thinking\" ` +
-        `where thinking is one of: ${VALID_OVERRIDE_THINKING_LEVELS.join(", ")}.`,
-    };
-  }
-
-  const provider = value.slice(0, slashIndex).trim();
-  const modelWithThinking = value.slice(slashIndex + 1).trim();
-  const thinkingSeparator = modelWithThinking.lastIndexOf(":");
-
-  if (thinkingSeparator <= 0 || thinkingSeparator === modelWithThinking.length - 1) {
-    return {
-      error:
-        `Invalid PI_LIBRARIAN_MODEL=\"${rawValue}\". Expected format \"provider/model:thinking\" ` +
-        `where thinking is one of: ${VALID_OVERRIDE_THINKING_LEVELS.join(", ")}.`,
-    };
-  }
-
-  const modelId = modelWithThinking.slice(0, thinkingSeparator).trim();
-  const thinking = modelWithThinking.slice(thinkingSeparator + 1).trim().toLowerCase();
-
-  if (!provider || !modelId) {
-    return {
-      error:
-        `Invalid PI_LIBRARIAN_MODEL=\"${rawValue}\". Provider/model must be non-empty and use ` +
-        `\"provider/model:thinking\" format.`,
-    };
-  }
-
-  if (!VALID_OVERRIDE_THINKING_LEVELS.includes(thinking as LibrarianOverrideThinkingLevel)) {
-    return {
-      error:
-        `Invalid PI_LIBRARIAN_MODEL thinking level \"${thinking}\". Valid values: ` +
-        VALID_OVERRIDE_THINKING_LEVELS.join(", "),
-    };
-  }
-
-  return {
-    value: {
-      provider,
-      modelId,
-      thinkingLevel: thinking as LibrarianOverrideThinkingLevel,
-    },
-  };
-}
-
-function selectLibrarianSubagentModel(
-  modelRegistry: ExtensionContext["modelRegistry"],
-  currentModel: ExtensionContext["model"],
-): { selection: LibrarianSubagentModelSelection | null; error?: string } {
-  const rawOverride = process.env.PI_LIBRARIAN_MODEL?.trim() ?? "";
-  if (!rawOverride) {
-    return {
-      selection: getSmallModelFromProvider(modelRegistry, currentModel) as LibrarianSubagentModelSelection | null,
-    };
-  }
-
-  const parsed = parseLibrarianModelOverride(rawOverride);
-  if ("error" in parsed) return { selection: null, error: parsed.error };
-
-  const provider = parsed.value.provider.toLowerCase();
-  const modelId = parsed.value.modelId.toLowerCase();
-
-  const selectedModel = modelRegistry
-    .getAvailable()
-    .find((candidate) => candidate.provider.toLowerCase() === provider && candidate.id.toLowerCase() === modelId);
-
-  if (!selectedModel) {
-    return {
-      selection: null,
-      error:
-        `PI_LIBRARIAN_MODEL requested \"${parsed.value.provider}/${parsed.value.modelId}\", but that model is not available. ` +
-        `Check credentials (/login or auth env vars) and verify provider/model ID.`,
-    };
-  }
-
-  return {
-    selection: {
-      model: selectedModel,
-      thinkingLevel: parsed.value.thinkingLevel,
-      reason: `env override: PI_LIBRARIAN_MODEL=${selectedModel.provider}/${selectedModel.id}:${parsed.value.thinkingLevel}`,
-    },
-  };
-}
+import {
+  buildNoCandidateError,
+  createLibrarianModelSelectionPlan,
+  formatFinalFailureMessage,
+  getNextLibrarianSubagentModel,
+  isAbortLikeError,
+  isQuotaError,
+  looksLikeSilentModelFailure,
+  markModelTemporarilyUnavailable,
+  modelLabel,
+  type LibrarianAttemptFailure,
+  type LibrarianModelUnavailableReason,
+  type LibrarianSubagentModelSelection,
+} from "./model-selection";
 
 function createTurnBudgetExtension(maxTurns: number): ExtensionFactory {
   return (pi) => {
@@ -215,14 +124,9 @@ export default function librarianExtension(pi: ExtensionAPI) {
         ];
 
         const modelRegistry = ctx.modelRegistry;
-        const { selection: subModelSelection, error: selectionError } = selectLibrarianSubagentModel(
-          modelRegistry,
-          ctx.model,
-        );
-
-        if (!subModelSelection) {
-          const error =
-            selectionError ?? "No models available. Configure credentials (e.g. /login or auth.json) and try again.";
+        const planResult = createLibrarianModelSelectionPlan(ctx.model);
+        if (!planResult.plan) {
+          const error = planResult.error ?? "Failed to parse PI_LIBRARIAN_MODELS.";
           runs[0].status = "error";
           runs[0].error = error;
           runs[0].summaryText = error;
@@ -238,11 +142,30 @@ export default function librarianExtension(pi: ExtensionAPI) {
           };
         }
 
-        const subModel = subModelSelection.model;
-        const subagentThinkingLevel = subModelSelection.thinkingLevel;
-        const subagentSelection = {
-          reason: subModelSelection.reason,
-        } as const;
+        const selectionPlan = planResult.plan;
+        let currentSelection = getNextLibrarianSubagentModel(selectionPlan, modelRegistry);
+
+        if (!currentSelection) {
+          const error = buildNoCandidateError(selectionPlan);
+          runs[0].status = "error";
+          runs[0].error = error;
+          runs[0].summaryText = error;
+          runs[0].endedAt = Date.now();
+          return {
+            content: [{ type: "text", text: error }],
+            details: {
+              status: "error",
+              workspace,
+              runs,
+            } satisfies LibrarianDetails,
+            isError: true,
+          };
+        }
+
+        let subModel = currentSelection.model;
+        let subagentSelection: SubagentSelectionInfo = {
+          reason: currentSelection.reason,
+        };
 
         let lastUpdate = 0;
         const emitAll = (force = false) => {
@@ -317,23 +240,26 @@ export default function librarianExtension(pi: ExtensionAPI) {
 
         const wasAborted = () => toolAborted || signal?.aborted;
         const run = runs[0];
+        const attemptFailures: LibrarianAttemptFailure[] = [];
 
-        let session: any;
-        let unsubscribe: (() => void) | undefined;
+        const resourceLoader = new DefaultResourceLoader({
+          noExtensions: true,
+          additionalExtensionPaths: ["npm:pi-subdir-context"],
+          noSkills: true,
+          noPromptTemplates: true,
+          noThemes: true,
+          extensionFactories: [createTurnBudgetExtension(maxTurns)],
+          systemPromptOverride: () => systemPrompt,
+          skillsOverride: () => ({ skills: [], diagnostics: [] }),
+        });
 
-        try {
-          const resourceLoader = new DefaultResourceLoader({
-            noExtensions: true,
-            additionalExtensionPaths: ["npm:pi-subdir-context"],
-            noSkills: true,
-            noPromptTemplates: true,
-            noThemes: true,
-            extensionFactories: [createTurnBudgetExtension(maxTurns)],
-            systemPromptOverride: () => systemPrompt,
-            skillsOverride: () => ({ skills: [], diagnostics: [] }),
-          });
-          await resourceLoader.reload();
-
+        const runAttempt = async (
+          selection: LibrarianSubagentModelSelection,
+        ): Promise<
+          | { status: "success" }
+          | { status: "aborted" }
+          | { status: "failure"; message: string; error: unknown; reason: LibrarianModelUnavailableReason }
+        > => {
           run.status = "running";
           run.turns = 0;
           run.toolCalls = [];
@@ -342,70 +268,144 @@ export default function librarianExtension(pi: ExtensionAPI) {
           run.error = undefined;
           run.summaryText = undefined;
 
-          const { session: createdSession } = await createAgentSession({
-            cwd: workspace,
-            modelRegistry,
-            resourceLoader,
-            sessionManager: SessionManager.inMemory(workspace),
-            model: subModel,
-            thinkingLevel: subagentThinkingLevel,
-            tools: [createReadTool(workspace), createBashTool(workspace)],
-          });
+          let session: any;
+          let unsubscribe: (() => void) | undefined;
 
-          session = createdSession;
-          activeSessions.add(session as any);
+          try {
+            const { session: createdSession } = await createAgentSession({
+              cwd: workspace,
+              modelRegistry,
+              resourceLoader,
+              sessionManager: SessionManager.inMemory(workspace),
+              model: selection.model,
+              thinkingLevel: selection.thinkingLevel,
+              tools: [createReadTool(workspace), createBashTool(workspace)],
+            });
 
-          unsubscribe = session.subscribe((event) => {
-            switch (event.type) {
-              case "turn_end": {
-                run.turns += 1;
-                emitAll();
-                break;
-              }
-              case "tool_execution_start": {
-                run.toolCalls.push({
-                  id: event.toolCallId,
-                  name: event.toolName,
-                  args: event.args,
-                  startedAt: Date.now(),
-                });
-                if (run.toolCalls.length > MAX_TOOL_CALLS_TO_KEEP) {
-                  run.toolCalls.splice(0, run.toolCalls.length - MAX_TOOL_CALLS_TO_KEEP);
+            session = createdSession;
+            activeSessions.add(session as any);
+
+            unsubscribe = session.subscribe((event) => {
+              switch (event.type) {
+                case "turn_end": {
+                  run.turns += 1;
+                  emitAll();
+                  break;
                 }
-                emitAll(true);
-                break;
-              }
-              case "tool_execution_end": {
-                const call = run.toolCalls.find((c) => c.id === event.toolCallId);
-                if (call) {
-                  call.endedAt = Date.now();
-                  call.isError = event.isError;
+                case "tool_execution_start": {
+                  run.toolCalls.push({
+                    id: event.toolCallId,
+                    name: event.toolName,
+                    args: event.args,
+                    startedAt: Date.now(),
+                  });
+                  if (run.toolCalls.length > MAX_TOOL_CALLS_TO_KEEP) {
+                    run.toolCalls.splice(0, run.toolCalls.length - MAX_TOOL_CALLS_TO_KEEP);
+                  }
+                  emitAll(true);
+                  break;
                 }
-                emitAll(true);
-                break;
+                case "tool_execution_end": {
+                  const call = run.toolCalls.find((c) => c.id === event.toolCallId);
+                  if (call) {
+                    call.endedAt = Date.now();
+                    call.isError = event.isError;
+                  }
+                  emitAll(true);
+                  break;
+                }
               }
+            });
+
+            await session.prompt(buildLibrarianUserPrompt(query, repos, owners, maxSearchResults), {
+              expandPromptTemplates: false,
+            });
+
+            run.summaryText = getLastAssistantText(session.state.messages as any[]).trim();
+            if (!run.summaryText) run.summaryText = wasAborted() ? "Aborted" : "(no output)";
+            run.status = wasAborted() ? "aborted" : "done";
+            run.endedAt = Date.now();
+            emitAll(true);
+
+            if (run.status === "aborted") return { status: "aborted" };
+
+            if (looksLikeSilentModelFailure(run)) {
+              const message = "Model produced no output and made no tool calls.";
+              run.status = "error";
+              run.error = message;
+              run.summaryText = message;
+              run.endedAt = Date.now();
+              emitAll(true);
+              return { status: "failure", message, error: new Error(message), reason: "error" };
             }
-          });
 
-          await session.prompt(buildLibrarianUserPrompt(query, repos, owners, maxSearchResults), {
-            expandPromptTemplates: false,
-          });
-          run.summaryText = getLastAssistantText(session.state.messages as any[]).trim();
-          if (!run.summaryText) run.summaryText = wasAborted() ? "Aborted" : "(no output)";
-          run.status = wasAborted() ? "aborted" : "done";
-          run.endedAt = Date.now();
-          emitAll(true);
+            return { status: "success" };
+          } catch (error) {
+            const aborted = wasAborted() || isAbortLikeError(error);
+            const message = aborted ? "Aborted" : error instanceof Error ? error.message : String(error);
+            run.status = aborted ? "aborted" : "error";
+            run.error = aborted ? undefined : message;
+            run.summaryText = message;
+            run.endedAt = Date.now();
+            emitAll(true);
+
+            if (aborted) return { status: "aborted" };
+
+            return {
+              status: "failure",
+              message,
+              error,
+              reason: isQuotaError(error) ? "quota" : "error",
+            };
+          } finally {
+            if (session) activeSessions.delete(session as any);
+            unsubscribe?.();
+            session?.dispose();
+          }
+        };
+
+        try {
+          await resourceLoader.reload();
+
+          while (currentSelection) {
+            subModel = currentSelection.model;
+            subagentSelection = { reason: currentSelection.reason };
+            emitAll(true);
+
+            const attemptResult = await runAttempt(currentSelection);
+
+            if (attemptResult.status === "success") break;
+            if (attemptResult.status === "aborted") break;
+
+            attemptFailures.push({
+              modelLabel: modelLabel(currentSelection),
+              reason: attemptResult.reason,
+              message: attemptResult.message,
+            });
+
+            markModelTemporarilyUnavailable(currentSelection.model, attemptResult.reason);
+
+            const nextSelection = getNextLibrarianSubagentModel(selectionPlan, modelRegistry);
+            if (!nextSelection) {
+              const error = formatFinalFailureMessage(attemptFailures);
+              run.status = "error";
+              run.error = error;
+              run.summaryText = error;
+              run.endedAt = Date.now();
+              emitAll(true);
+              break;
+            }
+
+            currentSelection = nextSelection;
+          }
         } catch (error) {
-          const message = wasAborted() ? "Aborted" : error instanceof Error ? error.message : String(error);
-          run.status = wasAborted() ? "aborted" : "error";
-          run.error = wasAborted() ? undefined : message;
+          const aborted = wasAborted() || isAbortLikeError(error);
+          const message = aborted ? "Aborted" : error instanceof Error ? error.message : String(error);
+          run.status = aborted ? "aborted" : "error";
+          run.error = aborted ? undefined : message;
           run.summaryText = message;
           run.endedAt = Date.now();
           emitAll(true);
-        } finally {
-          if (session) activeSessions.delete(session as any);
-          unsubscribe?.();
-          session?.dispose();
         }
 
         const status = computeOverallStatus(runs);

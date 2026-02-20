@@ -2,7 +2,7 @@
 
 - Keep this package dependency-light. Do not add runtime dependencies unless strictly necessary.
 - `extensions/index.ts` is the only extension entrypoint; keep orchestration there.
-- Model routing policy source of truth: https://github.com/default-anton/pi-subagent-model-selection. Do not fork behavior locally.
+- Model routing policy lives locally in `extensions/model-selection.ts`; keep behavior deterministic and dependency-light.
 - Selection diagnostics contract lives in `extensions/librarian-core.ts` (`subagentSelection`). Keep it tight: `reason`.
 - Librarian turn budget is fixed at 10 (`DEFAULT_MAX_TURNS`); do not expose `maxTurns` as a tool parameter.
 
