@@ -17,6 +17,20 @@ All notable changes to `pi-librarian` are documented here.
 
 ### Changed
 
+- None.
+
+### Fixed
+
+- None.
+
+## [1.3.2] - 2026-03-19
+
+### Added
+
+- None.
+
+### Changed
+
 - Updated the release workflow to `actions/checkout@v5` and `actions/setup-node@v5` so GitHub Actions runs on the supported Node 24 action runtime.
 
 ### Fixed
