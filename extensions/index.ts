@@ -435,9 +435,8 @@ export default function librarianExtension(pi: ExtensionAPI) {
       const owners = Array.isArray((args as any)?.owners) ? (args as any).owners.length : 0;
       const preview = shorten(query.replace(/\s+/g, " ").trim(), 70);
 
-      const title = theme.fg("toolTitle", theme.bold("librarian"));
       const scope = theme.fg("muted", `repos:${repos} owners:${owners}`);
-      const text = title + (preview ? `\n${scope} · ${preview}` : `\n${scope}`);
+      const text = preview ? `${scope} · ${preview}` : scope;
       return new Text(text, 0, 0);
     },
 

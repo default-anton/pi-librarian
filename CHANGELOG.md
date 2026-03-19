@@ -23,6 +23,20 @@ All notable changes to `pi-librarian` are documented here.
 
 - None.
 
+## [1.3.1] - 2026-03-19
+
+### Added
+
+- None.
+
+### Changed
+
+- None.
+
+### Fixed
+
+- Removed the duplicate `librarian` title from the tool call renderer so the tool name is rendered once across call/result UI.
+
 ## [1.3.0] - 2026-02-20
 
 ### Added
