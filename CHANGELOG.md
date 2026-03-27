@@ -23,6 +23,20 @@ All notable changes to `pi-librarian` are documented here.
 
 - None.
 
+## [1.3.3] - 2026-03-27
+
+### Added
+
+- None.
+
+### Changed
+
+- Updated peer dependencies `@mariozechner/pi-coding-agent` and `@mariozechner/pi-tui` to `^0.63.1` for pi 0.63.x compatibility.
+
+### Fixed
+
+- None.
+
 ## [1.3.2] - 2026-03-19
 
 ### Added
