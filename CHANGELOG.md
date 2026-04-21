@@ -23,7 +23,7 @@ All notable changes to `pi-librarian` are documented here.
 
 - None.
 
-## [1.3.4] - 2026-04-21
+## [1.3.5] - 2026-04-21
 
 ### Added
 
