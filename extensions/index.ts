@@ -6,8 +6,7 @@ import {
   DefaultResourceLoader,
   SessionManager,
   createAgentSession,
-  createBashTool,
-  createReadTool,
+  getAgentDir,
   getMarkdownTheme,
 } from "@mariozechner/pi-coding-agent";
 import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
@@ -243,6 +242,8 @@ export default function librarianExtension(pi: ExtensionAPI) {
         const attemptFailures: LibrarianAttemptFailure[] = [];
 
         const resourceLoader = new DefaultResourceLoader({
+          cwd: workspace,
+          agentDir: getAgentDir(),
           noExtensions: true,
           additionalExtensionPaths: ["npm:pi-subdir-context"],
           noSkills: true,
@@ -279,7 +280,7 @@ export default function librarianExtension(pi: ExtensionAPI) {
               sessionManager: SessionManager.inMemory(workspace),
               model: selection.model,
               thinkingLevel: selection.thinkingLevel,
-              tools: [createReadTool(workspace), createBashTool(workspace)],
+              tools: ["read", "bash"],
             });
 
             session = createdSession;

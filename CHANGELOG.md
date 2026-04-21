@@ -23,6 +23,20 @@ All notable changes to `pi-librarian` are documented here.
 
 - None.
 
+## [1.3.4] - 2026-04-21
+
+### Added
+
+- None.
+
+### Changed
+
+- Updated peer dependencies `@mariozechner/pi-coding-agent` and `@mariozechner/pi-tui` to `^0.68.0` for pi 0.68.x compatibility.
+
+### Fixed
+
+- Updated the Librarian subagent session to use the pi 0.68 tool-name allowlist (`tools: ["read", "bash"]`) and explicit `DefaultResourceLoader` `cwd` / `agentDir` inputs instead of removed ambient/default behavior.
+
 ## [1.3.3] - 2026-03-27
 
 ### Added
