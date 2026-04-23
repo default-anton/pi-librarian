@@ -23,6 +23,20 @@ All notable changes to `pi-librarian` are documented here.
 
 - None.
 
+## [1.3.6] - 2026-04-22
+
+### Added
+
+- None.
+
+### Changed
+
+- Updated peer dependencies to `@mariozechner/pi-coding-agent` / `@mariozechner/pi-tui` `^0.69.0` and migrated the extension TypeBox import to `typebox` 1.x for pi 0.69 compatibility.
+
+### Fixed
+
+- None.
+
 ## [1.3.5] - 2026-04-21
 
 ### Added

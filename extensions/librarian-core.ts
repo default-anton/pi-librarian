@@ -1,6 +1,6 @@
 import events from "node:events";
 
-import { Type } from "@sinclair/typebox";
+import { Type } from "typebox";
 
 export const DEFAULT_MAX_TURNS = 10;
 export const DEFAULT_MAX_SEARCH_RESULTS = 30;
