@@ -23,6 +23,20 @@ All notable changes to `pi-librarian` are documented here.
 
 - None.
 
+## [1.3.7] - 2026-05-07
+
+### Added
+
+- None.
+
+### Changed
+
+- Switched pi peer imports and dependencies to the `@earendil-works` scope at `^0.74.0`.
+
+### Fixed
+
+- None.
+
 ## [1.3.6] - 2026-04-22
 
 ### Added

@@ -1,4 +1,4 @@
-import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 import { shorten, type LibrarianRunDetails, type SubagentSelectionInfo } from "./librarian-core";
 
